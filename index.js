@@ -1,6 +1,5 @@
 const express = require('express')
 const pg = require('pg')
-const compression = require('compression');
 const app = express();
 const config = require('config');
 // configs come from standard PostgreSQL env vars
@@ -36,7 +35,6 @@ const MAX_REQ = 8; //max requests, arbitrary number to simulate a limit
 const TIMEOUT = 30000; //30 second timeout, arbitrary number to simulate 
 
 
-app.use(compression());
 
 //connect to postgres database
 const pool = new pg.Pool({
@@ -54,6 +52,14 @@ const queryHandler = (req, res, next) => {
   }).catch(next)
 }
 
+//call free_user that will call helper/axuliary function with a timeout of 30 seconds
+const free_user = () => setTimeout(free_user_helper,TIMEOUT)
+
+//helper/auxiliary function to unqeue users who have been blocked from making requests
+const free_user_helper = () =>{
+  let to_free = queued.shift() //following a First in first out manner, unblock the first user
+  requests[to_free.endpoint][to_free.ip]= 0; //reset users request count to 0
+}
 
 //middleware
 const rate_limiter = (req,res,next) =>{
@@ -109,14 +115,6 @@ const rate_limiter = (req,res,next) =>{
 
 app.use(rate_limiter) //use our middleware above^, will apply to all the routes
 
-//call free_user that will call helper/axuliary function with a timeout of 30 seconds
-const free_user = () => setTimeout(free_user_helper,TIMEOUT)
-
-//helper/auxiliary function to unqeue users who have been blocked from making requests
-const free_user_helper = () =>{
-  let to_free = queued.shift() //following a First in first out manner, unblock the first user
-  requests[to_free.endpoint][to_free.ip]= 0; //reset users request count to 0
-}
 
 app.get('/',(req, res) => {
 
