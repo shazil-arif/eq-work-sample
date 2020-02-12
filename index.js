@@ -64,13 +64,24 @@ const free_user_helper = () =>{
 //middleware
 const rate_limiter = (req,res,next) =>{
 
+  //get the route that called the middleware so we know which route to increase the number of requests for
   let calling_url = req.url;
-  let request_ip = req.connection.remoteAddress;
-  let in_queue = requests[calling_url];
-  
-  console.log(requests); //for debugging track the requests of each endpoint at any time
+  //get current requests ip address
 
-  if(in_queue && requests[calling_url][request_ip] >= MAX_REQ){
+  let request_ip = req.connection.remoteAddress;
+
+  //get the object for the route that called the middleware
+  let current_route = requests[calling_url];
+  
+  console.log(requests); //for debugging track the requests of each endpoint at any time, please view output in terminal/console
+
+  /*if current route is defined then lookup users ip and get their request count for the specific route
+  if greater than max allowed, then block*/
+  if(current_route && requests[calling_url][request_ip] >= MAX_REQ){
+
+    /* create a new object with route name and user ip 
+    this will be used to add users to a queue of blocked users 
+    they will then be unqeued*/
 
     const next_in_queue = {
       endpoint:calling_url,
@@ -80,19 +91,25 @@ const rate_limiter = (req,res,next) =>{
     //queue the user so we can remove them in a First in First Out (FIFO) manner
     queued.push(next_in_queue);
 
-    process.nextTick(free_user); //schedule users to be free'd immediately after
-    return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} request limit`)
+    process.nextTick(free_user); //schedule users to be free'd immediately our middlware finishes executing
+
+    //send a response to our client
+    return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} request limit. See the main / route to track ur requests count`)
   }
-  if(in_queue){
+
+  //if the user/ip has no exceeded the max number of requests, increment their count
+  if(current_route){
     requests[calling_url][request_ip]++; //increase count by one if user already requested before
   }
+
+  //if user/ip has not made a request to the route yet, set their count for the route to 1
   else {
     requests[calling_url] = { 
       [request_ip]:1  //if first time requesting, set users count to 1
     }; 
   }
 
-  return next(); //pass control to the callback for api endpoint
+  return next(); //pass control to the callback/handler for api endpoint
 }
 
 app.use(rate_limiter) //use our middleware above^, will apply to all the routes
@@ -124,7 +141,7 @@ app.get('/',(req, res) => {
     }
   }
   //send the response to the client
-  return res.send(` Welcome to EQ Works 😎 above are the endpoints and how many requests you've made to each, source code: https://github.com/shazil-arif/eq-work-sample  ${response}`)
+  return res.send(` Welcome to EQ Works 😎 above are the endpoints and how many requests you've made to each. call endpoints for their count to show above. source code: https://github.com/shazil-arif/eq-work-sample  ${response}`)
 })
 
 
