@@ -60,6 +60,7 @@ const rate_limiter = (req,res,next) =>{
 
   //get the route that called the middleware so we know which route to increase the number of requests for
   let calling_url = req.url;
+  console.log(req.url);
   //get current requests ip address
 
   let request_ip = req.connection.remoteAddress;
