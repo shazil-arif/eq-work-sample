@@ -12,14 +12,14 @@ EQ works product role work sample/challenge
 API Rate Limiting
 */
 
-var queued =  []; //here we will queue in users who exceed the request limit
-var requests = {}; //quick look up for ip address and the number of requests that address made
-const MAX_REQ = 5; //max reqeuests, arbitrary number
-const TIMEOUT = 30000; //15 second timeout, arbitrary
+let queued =  []; //here we will queue in users who exceed the request limit
+let requests = {}; //quick look up for ip address and the number of requests that address made
+const MAX_REQ = 8; //max reqeuests, arbitrary number
+const TIMEOUT = 30000; //30 second timeout, arbitrary
 
 const pool = new pg.Pool({
   user: 'readonly',
-  host: config.get('host'),
+  host: config.get('host'), 
   database: 'work_samples',
   password: config.get('password'),
   port: 5432,
@@ -34,35 +34,63 @@ const queryHandler = (req, res, next) => {
 
 app.use(compression());
 
-const free_user = () => setTimeout(free_user_helper,TIMEOUT)
+const free_user = (route,ip) => setTimeout(free_user_helper,TIMEOUT)
 
-const free_user_helper = () =>{
-  var to_free = queued.shift()
-  requests[to_free] = 0; //reset users request count to 0
+const free_user_helper = (route,ip) =>{
+  let to_free = queued.shift() //following a First in first out manner, unblock the first user
+  requests[to_free.endpoint][to_free.ip]= 0; //reset users request count to 0
 }
-/* Middleware function*/
-const rate_limiter = (req,res,next) =>{
-  var request_ip = req.connection.remoteAddress
-  var in_queue = requests[request_ip]
 
-  if(in_queue && in_queue > MAX_REQ){
-    queued.push(request_ip); //queue the ip/user
-    process.nextTick(free_user); //schedule users to be free'd in a FIFO manner immediately after
-    return res.status(429).send("Request limit exceeded. Please wait 30 seconds")
+/*
+requests = {
+  "/events/hourly":{
+    a mapping between ip address and number of requests made
+    "192.1.21.90":5,
+    "192.1.31.13":8
+  },
+  "/events/daily":{
+    "192.1.21.90":1,
+    "192.1.31.13":1
+  }
+}
+*/
+
+const rate_limiter = (req,res,next) =>{
+
+  let calling_url = req.url;
+  let request_ip = req.connection.remoteAddress;
+  let in_queue = requests[calling_url];
+  let x = `${request_ip}`
+  console.log(requests);
+
+  if(in_queue && requests[calling_url][request_ip] >= MAX_REQ){
+
+    const next_in_queue = {
+      endpoint:calling_url,
+      ip:request_ip
+    }
+
+    //queue the user so we can remove them in a First in First Out (FIFO) manner
+    queued.push(next_in_queue);
+
+    process.nextTick(free_user); //schedule users to be free'd immediately after
+    return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} limit`)
   }
   if(in_queue){
-    requests[request_ip]++; //increase count by one if user already requested before
+    requests[calling_url][request_ip]++; //increase count by one if user already requested before
   }
   else {
-    requests[request_ip] = 1; //if first time requesting, set users count to 1
+    requests[calling_url] = { 
+      [request_ip]:1  //if first time requesting, set users count to 1
+    }; 
   }
 
-  next(); //pass control to the callback for api endpoint
+  return next(); //pass control to the callback for api endpoint
 }
 
 app.use(rate_limiter) //use our middleware above^, will apply to all the routes
 
-app.get('/', (req, res) => {
+app.get('/',(req, res) => {
   res.send('Welcome to EQ Works 😎')
 })
 
