@@ -98,8 +98,8 @@ const rate_limiter = (req,res,next) =>{
     return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} request limit. See the main / route to track ur requests count. If you exceeded ${MAX_REQ} on the main route as well then wait 30 seconds till it resets`)
   }
 
-  //if the user/ip has no exceeded the max number of requests, increment their count
-  if(current_route){
+  //if the user/ip has not exceeded the max number of requests, increment their count
+  if(current_route && request_ip in current_route){
     requests[calling_url][request_ip]++; //increase count by one if user already requested before
   }
 
