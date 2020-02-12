@@ -201,7 +201,6 @@ app.get('/poi', (req, res, next) => {
 }, queryHandler)
 
 //deal with invalid requests
-app.get("*",(req,res)=>res.redirect('/'))
 
 app.listen(process.env.PORT || 5432, (err) => {
   if (err) {
