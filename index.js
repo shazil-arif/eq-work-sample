@@ -16,7 +16,9 @@ let queued =  []; //here we will queue in users who exceed the request limit and
 let requests = {}; //quick look up for ip address and the number of requests that address made
 
 
-/* The idea is the following, requests object will look like
+/* The idea is the following, requests object will look like:
+
+a mapping between api endpoints and an object containing request ip addresses and how many requests each address made
 requests = {
   "/events/hourly":{
     a mapping between ip address and number of requests made
@@ -30,9 +32,11 @@ requests = {
 }
 */
 
-const MAX_REQ = 8; //max reqeuests, arbitrary number to simulate a limit
+const MAX_REQ = 8; //max requests, arbitrary number to simulate a limit
 const TIMEOUT = 30000; //30 second timeout, arbitrary number to simulate 
 
+
+app.use(compression());
 
 //connect to postgres database
 const pool = new pg.Pool({
@@ -50,16 +54,6 @@ const queryHandler = (req, res, next) => {
   }).catch(next)
 }
 
-app.use(compression());
-
-//call free_user that will call helper/axuliary function with a timeout of 30 seconds
-const free_user = () => setTimeout(free_user_helper,TIMEOUT)
-
-//helper/auxiliary function to unqeue users who have been blocked from making requests
-const free_user_helper = () =>{
-  let to_free = queued.shift() //following a First in first out manner, unblock the first user
-  requests[to_free.endpoint][to_free.ip]= 0; //reset users request count to 0
-}
 
 //middleware
 const rate_limiter = (req,res,next) =>{
@@ -94,7 +88,7 @@ const rate_limiter = (req,res,next) =>{
     process.nextTick(free_user); //schedule users to be free'd immediately our middlware finishes executing
 
     //send a response to our client
-    return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} request limit. See the main / route to track ur requests count`)
+    return res.status(429).send(`${MAX_REQ} Requests limit exceeded. Please wait 30 seconds. you can still visit other http endpoints, each has its own ${MAX_REQ} request limit. See the main / route to track ur requests count. If you exceeded ${MAX_REQ} on the main route as well then wait 30 seconds till it resets`)
   }
 
   //if the user/ip has no exceeded the max number of requests, increment their count
@@ -113,6 +107,15 @@ const rate_limiter = (req,res,next) =>{
 }
 
 app.use(rate_limiter) //use our middleware above^, will apply to all the routes
+
+//call free_user that will call helper/axuliary function with a timeout of 30 seconds
+const free_user = () => setTimeout(free_user_helper,TIMEOUT)
+
+//helper/auxiliary function to unqeue users who have been blocked from making requests
+const free_user_helper = () =>{
+  let to_free = queued.shift() //following a First in first out manner, unblock the first user
+  requests[to_free.endpoint][to_free.ip]= 0; //reset users request count to 0
+}
 
 app.get('/',(req, res) => {
 
@@ -141,7 +144,7 @@ app.get('/',(req, res) => {
     }
   }
   //send the response to the client
-  return res.send(` Welcome to EQ Works 😎 above are the endpoints and how many requests you've made to each. call endpoints for their count to show above. source code: https://github.com/shazil-arif/eq-work-sample  ${response}`)
+  return res.send(` Welcome to EQ Works 😎 listed are the endpoints and how many requests you've made to each. call endpoints for their count to show. source code: https://github.com/shazil-arif/eq-work-sample  ${response}`)
 })
 
 
